@@ -6,18 +6,22 @@
 
 #define BUCKET_COUNT 10
 
-// dev  
+// dev
 // #include <iostream>
+
+struct cache_item {
+    Cache::val_type val;
+    Cache::size_type size;
+};
 
 class Cache::Impl {
     private:
         // private data structure
-        Evictor* evictor;
-        float max_load_factor;
         size_type maxmem;
+        Evictor* evictor;
         hash_func hasher;
         size_type cur_size = 0;
-        std::unordered_map<key_type, val_type, hash_func> table;
+        std::unordered_map<key_type, cache_item, hash_func> table;
 
     public:
         // Add a <key, value> pair to the cache.
@@ -29,14 +33,20 @@ class Cache::Impl {
         void set(key_type key, val_type val, size_type size) {
             if (space_used() + size <= maxmem || table.count(key) != 0) {
                 cur_size += size;
-                table[key] = val;
+                cache_item item;
+                item.val = val;
+                item.size = size;
+                table[key] = item;
                 if (evictor != nullptr)
                     evictor->touch_key(key);
             } else if (evictor != nullptr) {
                 key_type to_evict = evictor->evict();
                 this -> del(to_evict);
                 cur_size += size;
-                table[key] = val;
+                cache_item item;
+                item.val = val;
+                item.size = size;
+                table[key] = item;
                 evictor->touch_key(key);
             }
             // don't add into hash table
@@ -57,9 +67,9 @@ class Cache::Impl {
 
                 if (evictor != nullptr)
                     evictor->touch_key(key);
-                val_size = sizeof(*table.at(key));
+                val_size = table.at(key).size;
 
-                return table.at(key);
+                return table.at(key).val;
             } else {
                 return nullptr;
             }
@@ -85,9 +95,9 @@ class Cache::Impl {
         }
 
         // This function is used to test the resizing using max_load_factor
-        
+
         /*
-        int get_bucket_count() const{ 
+        int get_bucket_count() const{
         return table.bucket_count();
         }
         */
@@ -96,9 +106,8 @@ class Cache::Impl {
               float max_load_factor,
               Evictor* evictor,
               hash_func hasher) : maxmem(maxmem),
-                    max_load_factor(max_load_factor),
                     evictor(evictor),
-                    table(std::unordered_map<key_type, val_type, hash_func> (BUCKET_COUNT, hasher)) {
+                    table(std::unordered_map<key_type, cache_item, hash_func> (BUCKET_COUNT, hasher)) {
                         table.max_load_factor(max_load_factor);
                     }
 };

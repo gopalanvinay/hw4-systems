@@ -9,7 +9,7 @@ Cache obj(max_size, 0.75, evictor, std::hash<key_type>());
 
 void test_set() {
     Cache::size_type val_size;
-    for (int i=0; i < max_size; i++) {
+    for (int i=0; i < 20; i++) {
         ::obj.set(std::to_string(i), "1", 1);
     }
     assert(::obj.get("1", val_size) == "1");
@@ -63,7 +63,7 @@ void test_reset() {
 
 void test_evict() {
     Cache::size_type val_size;
-    for (int i=0; i < max_size; i++) {
+    for (int i=0; i < 20; i++) {
         ::obj.set(std::to_string(i), "1", 1);
     }
     // maxmem exceeded

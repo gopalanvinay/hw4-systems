@@ -6,6 +6,9 @@
 
 // Boost Libraries
 #include <boost/beast/core.hpp>
+#include <boost/algorithm/string/classification.hpp>
+
+#include <boost/algorithm/string/split.hpp>
 #include <boost/beast/websocket.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <cstdlib>
@@ -56,48 +59,45 @@ do_session(tcp::socket& socket)
             // HEAD: Return just a header, regardless of any resources requested. The response must include the pair `Space-Used: `, where is the integer value returned by the Cache's `space_used()` method. You may include as many additional (header) lines as you wish, but as a bare minimum, you should return the HTTP version (1.1 is OK), Accept, and Content-Type with `application/json` (see here). You can can return these header fields in other types of requests as well, but they must be present in a HEAD request.
             // POST /reset: Upon receiving this message, the server calls Cache::reset to clean up all its data. Any other target than "/reset" should be ignored and return NOT FOUND.
             // */
-            // std::string msg = beast::make_printable(buffer.data());
+            auto msg = beast::make_printable(buffer.data());
 
             // // Process the message here
-            // std::vector<std::string> result;
-            // boost::split(result, msg, boost::is_any_of(" "));
+            std::vector<std::string> result;
+            boost::split(result, msg, boost::is_any_of("\t "));
 
             // // print -> ws.write(message here)
-            // switch(result[0])
-            // {
-            //     case 'GET':
-            //         if (result[1] == "/key")
-            //             val_type resp = cache.get();
-            //             if (resp == nullptr) {
-            //                 printf("KEY NOT IN CACHE");
-            //             } else {
-            //                 printf("%s\n", );
-            //             }
-            //         else
-            //             ws.write(net::buffer(std::string("NOT FOUND")));
-            //         break;
-            //     case 'PUT':
-            //         if (result[1] == "/reset")
-            //             cache.reset();
-            //         else
-            //             printf("NOT FOUND");
-            //         break;
-            //     case 'DELETE':
-            //         if (result[1] == "/key")
-            //             cache.del(result[2]);
-            //         break;
-            //     case 'HEAD':
-            //         Cache::size_type x = cache.space_used();
-            //         // add x into the header
-            //         ws.write(net::buffer(std::string("NOT FOUND")));
-            //         break;
-            //     case 'POST':
-            //         if (result[1] == "/reset")
-            //             cache.reset();
-            //         else
-            //             ws.write(net::buffer(std::string("NOT FOUND")));
-            //         break;
-            // }
+            Cache cache(100);
+            if (result[0] == "GET") {
+                     if (result[1] == "/key") {
+                        //Cache::size_type* s;
+                        //Cache::val_type resp = cache.get("key", s);
+                        //if (resp == nullptr) {
+                        //    printf("KEY NOT IN CACHE");
+                        //} else {
+                        printf("This is key");
+                        //}
+                    }
+                    else {
+                        ws.write(net::buffer(std::string("NOT FOUND")));
+                    }
+            } else if (result[0] == "PUT") {
+                     if (result[1] == "/reset")
+                         cache.reset();
+                     else
+                         printf("NOT FOUND");
+            } else if (result[0] == "DELETE") {
+                     if (result[1] == "/key")
+                         cache.del(result[2]);
+            } else if (result[0] == "HEAD") {
+                    //Cache::size_type x = cache.space_used();
+                    // add x into the header
+                    ws.write(net::buffer(std::string("NOT FOUND")));
+            } else if (result[0] == "POST") {
+                     if (result[1] == "/reset")
+                         cache.reset();
+                     else
+                         ws.write(net::buffer(std::string("NOT FOUND")));
+            }
 
             // Echo the message back
             ws.text(ws.got_text());

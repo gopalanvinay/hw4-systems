@@ -24,10 +24,9 @@ using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
 //------------------------------------------------------------------------------
 
+
 // Echoes back all received WebSocket messages
-void
-do_session(tcp::socket& socket)
-{
+void do_session(tcp::socket& socket){
     try
     {
         // Construct the stream by moving in the socket

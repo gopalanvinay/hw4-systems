@@ -62,7 +62,7 @@ void do_session(tcp::socket& socket){
 
             // // Process the message here
             std::vector<std::string> result;
-            boost::split(result, msg, boost::is_any_of("\t "));
+            boost::split(result, msg, boost::is_any_of("/"));
 
             // // print -> ws.write(message here)
             Cache cache(100);

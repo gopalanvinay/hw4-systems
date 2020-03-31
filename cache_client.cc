@@ -37,6 +37,7 @@ class Cache::Impl {
             std::string query = (boost::format("SET /%s/%d") % key % val).str();
             ws.write(net::buffer(query));
         }
+        // doesnt do anything with size type yet
 
         // Retrieve a pointer to the value associated with key in the cache,
         // or nullptr if not found.

@@ -48,59 +48,59 @@ void do_session(tcp::socket& socket){
         {
             // This buffer will hold the incoming message
             beast::flat_buffer buffer;
+            //http::request<http::dynamic_body> request_;
 
             // Read a message
             ws.read(buffer);
-            // /*
-            // GET /key: Returns a JSON tuple with { key: , value: } pair (where is the resource in the request, and value is the appropriate value from the cache), or an error message if the key isn't in the cache.
-            // PUT /k/v: create or replace a k,v pair in the cache. You may assume v is always a value and neither k nor v contain the '/' character or any other characters that would invalidate the URL, like a whitespace.
-            // DELETE /key: Delete from the cache the key and value associated with key.
-            // HEAD: Return just a header, regardless of any resources requested. The response must include the pair `Space-Used: `, where is the integer value returned by the Cache's `space_used()` method. You may include as many additional (header) lines as you wish, but as a bare minimum, you should return the HTTP version (1.1 is OK), Accept, and Content-Type with `application/json` (see here). You can can return these header fields in other types of requests as well, but they must be present in a HEAD request.
-            // POST /reset: Upon receiving this message, the server calls Cache::reset to clean up all its data. Any other target than "/reset" should be ignored and return NOT FOUND.
-            // */
-            auto msg = beast::make_printable(buffer.data());
+            // https://www.boost.org/doc/libs/master/libs/beast/example/http/server/small/http_server_small.cpp
+            switch(buffer.method())
+            {
+                case http::verb::get:
+                    Cache::size_type* size;
+                    Cache::val_type resp = cache.get(buffer.body(), size);
+                    if (resp == nullptr) {
+                        printf("KEY NOT IN CACHE"); // send over ws instead
+                    } else {
+                        printf("This is key");
+                    }
+                    break;
+                case http::verb::put:
+                    //split by '=' buffer.body()
+                    key_type key;
+                    val_type val;
+                    size_type size;
+                    cache.set(key, val, size);
+                    break;
+                case http::verb::delete_:
+                    if (cache.del(buffer.body())) {
+                        printf("%s deleted", buffer.body());
+                    } else {
+                        printf("not deleted");
+                    }
+                    break;
+                case http::verb::head:
 
-            // // Process the message here
-            std::vector<std::string> result;
-            boost::split(result, msg, boost::is_any_of("/"));
-
+                    break;
+                case http::verb::post:
+                    if (buffer.body() == "reset") {
+                        cache.reset();
+                    } else {
+                        return "NOT FOUND";
+                    }
+                    break;
+                default:
+                    // We return responses indicating an error if
+                    // we do not recognize the request method.
+                    response_.result(http::status::bad_request);
+                    response_.set(http::field::content_type, "text/plain");
+                    beast::ostream(response_.body())
+                        << "Invalid request-method '"
+                        << std::string(request_.method_string())
+                        << "'";
+                    break;
+            }
             // // print -> ws.write(message here)
             Cache cache(100);
-            if (result[0] == "GET") {
-                     if (result[1] == "/key") {
-                        //Cache::size_type* s;
-                        //Cache::val_type resp = cache.get("key", s);
-                        //if (resp == nullptr) {
-                        //    printf("KEY NOT IN CACHE");
-                        //} else {
-                        printf("This is key");
-                        //}
-                    }
-                    else {
-                        ws.write(net::buffer(std::string("NOT FOUND")));
-                    }
-            } else if (result[0] == "PUT") {
-                     if (result[1] == "/reset")
-                         cache.reset();
-                     else
-                         printf("NOT FOUND");
-            } else if (result[0] == "DELETE") {
-                     if (result[1] == "/key")
-                         cache.del(result[2]);
-            } else if (result[0] == "HEAD") {
-                    //Cache::size_type x = cache.space_used();
-                    // add x into the header
-                    ws.write(net::buffer(std::string("NOT FOUND")));
-            } else if (result[0] == "POST") {
-                     if (result[1] == "/reset")
-                         cache.reset();
-                     else
-                         ws.write(net::buffer(std::string("NOT FOUND")));
-            }
-
-            // Echo the message back
-            ws.text(ws.got_text());
-            ws.write(buffer.data());
         }
     }
     catch(beast::system_error const& se)

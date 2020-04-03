@@ -34,6 +34,12 @@ class Cache::Impl {
         // from the cache to accomodate the new value. If unable, the new value
         // isn't inserted to the cache.
         void set(key_type key, val_type val, size_type size) {
+            beast::http::request<beast::http::string_body> req;
+            req.method(beast::http::verb::put);
+            req.target("/");
+            req.set(beast::http::field::content_type, "application/x-www-form-urlencoded");
+            req.body() = key + "=" + val.str();
+            req.prepare_payload();
             std::string query = (boost::format("SET /%s/%d") % key % val).str();
             ws.write(net::buffer(query));
         }
@@ -43,7 +49,12 @@ class Cache::Impl {
         // or nullptr if not found.
         // Sets the actual size of the returned value (in bytes) in val_size.
         val_type get(key_type key, size_type& val_size) const {
-            std::string query = (boost::format("GET %s") % key).str();
+            beast::http::request<beast::http::string_body> req;
+            req.method(beast::http::verb::get);
+            req.target("/");
+            req.set(beast::http::field::content_type, "application/x-www-form-urlencoded");
+            req.body() = key;
+            req.prepare_payload();
             ws.write(net::buffer(query));
             // This buffer will hold the incoming message
             beast::flat_buffer buffer;
@@ -55,29 +66,37 @@ class Cache::Impl {
 
         // Delete an object from the cache, if it's still there
         bool del(key_type key) {
-            std::string query = (boost::format("DEL %s") % key).str();
-            ws.write(net::buffer(query));
-            // This buffer will hold the incoming message
-            beast::flat_buffer buffer;
-            // Read a message into our buffer
-            ws.read(buffer);
-            // The make_printable() function helps print a ConstBufferSequence
-            beast::make_printable(buffer.data()) << std::endl;
+            beast::http::request<beast::http::string_body> req;
+            req.method(beast::http::verb::delete_);
+            req.target("/");
+            req.set(beast::http::field::content_type, "application/x-www-form-urlencoded");
+            req.body() = "key=" + key;
+            req.prepare_payload();
+            ws.write(req);
+            // Receive the HTTP response
+            http::read(stream, buffer, res);
+            return true; // fix here
         }
 
         // Compute the total amount of memory used up by all cache values (not keys)
         size_type space_used() const {
-            ws.write(net::buffer("HEAD"));
-            // This buffer will hold the incoming message
-            beast::flat_buffer buffer;
-            // Read a message into our buffer
-            ws.read(buffer);
-            // The make_printable() function helps print a ConstBufferSequence
-            beast::make_printable(buffer.data()) << std::endl;
+            beast::http::request<beast::http::string_body> req;
+            req.method(beast::http::verb::head);
+            req.target("/");
+            req.prepare_payload();
+            ws.write(req);
+            // Receive the HTTP response
+            http::read(stream, buffer, res);
         }
 
         // Delete all data from the cache
         void reset() {
+            beast::http::request<beast::http::string_body> req;
+            req.method(beast::http::verb::post);
+            req.target("/");
+            req.set(beast::http::field::content_type, "application/x-www-form-urlencoded");
+            req.body() = "reset";
+            req.prepare_payload();
             ws.write(net::buffer("POST /reset"));
         }
 

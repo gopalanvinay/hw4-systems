@@ -49,7 +49,13 @@ void do_session(tcp::socket& socket){
             // This buffer will hold the incoming message
             beast::flat_buffer buffer;
             //http::request<http::dynamic_body> request_;
+            // The socket for the currently connected client.
 
+            // The request message.
+            http::request<http::dynamic_body> request_;
+
+            // The response message.
+            http::response<http::dynamic_body> response_;
             // Read a message
             ws.read(buffer);
             // https://www.boost.org/doc/libs/master/libs/beast/example/http/server/small/http_server_small.cpp

@@ -18,9 +18,7 @@
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
 #include <boost/asio.hpp>
-#include <chrono>
 #include <cstdlib>
-#include <ctime>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -30,30 +28,12 @@ namespace http = beast::http;           // from <boost/beast/http.hpp>
 namespace net = boost::asio;            // from <boost/asio.hpp>
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
-namespace my_program_state
-{
-    std::size_t
-    request_count()
-    {
-        static std::size_t count = 0;
-        return ++count;
-    }
-
-    std::time_t
-    now()
-    {
-        return std::time(0);
-    }
-}
+Cache cache(1000);
 
 class http_connection : public std::enable_shared_from_this<http_connection> {
     public:
-        http_connection(tcp::socket socket)
-            : socket_(std::move(socket))
-        {
-
+        http_connection(tcp::socket socket) : socket_(std::move(socket)) {
         }
-        Cache cache(1000); // how to initizlize
         // Initiate the asynchronous operations associated with the connection.
         void start()
         {
@@ -71,10 +51,6 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
 
         // The response message.
         http::response<http::dynamic_body> response_;
-
-        // The timer for putting a deadline on connection processing.
-        net::steady_timer deadline_{
-            socket_.get_executor(), std::chrono::seconds(60)};
 
         // Asynchronously receive a complete request message.
         void read_request() {
@@ -159,7 +135,6 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                 [self](beast::error_code ec, std::size_t)
                 {
                     self->socket_.shutdown(tcp::socket::shutdown_send, ec);
-                    self->deadline_.cancel();
                 });
         }
 };
@@ -203,11 +178,11 @@ int main(int argc, char* argv[]) {
         // initialize cache
         //Cache cache(maxmem);
 
-        auto const address = net::ip::make_address(port_string);
+        auto const address = net::ip::make_address(port_string.c_str());
         unsigned short port = static_cast<unsigned short>(std::atoi(host_string.c_str()));
 
         net::io_context ioc{1};
-
+        Cache cache(1000);
         tcp::acceptor acceptor{ioc, {address, port}};
         tcp::socket socket{ioc};
         http_server(acceptor, socket);

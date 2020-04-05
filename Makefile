@@ -6,6 +6,9 @@ OBJ=$(SRC:.cc=.o)
 
 all:  cache_server test_cache_lib test_cache_client test_evictors
 
+test_beast: cache_lib.o sample-beast.o
+	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
+
 cache_server: cache_server.o cache_lib.o
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
 

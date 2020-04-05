@@ -82,24 +82,24 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                     // GET /key
                     val = cache.get((key_type) target, size);
                     if (val == nullptr) {
+                        response_.result(http::status::bad_request);
                         beast::ostream(response_.body())
                             << target
                             << " isn't in the cache\n";
                     } else {
                         beast::ostream(response_.body())
-                            << target
-                            << " = "
-                            << val
-                            << " \n";
+                            << "{key: "<< target << ", value: "<< val << " }\n";
                     }
                     break;
                 case http::verb::put:
                     // PUT /key/val
                     if (target.find("/") != boost::beast::string_view::npos) {
+                        response_.result(http::status::ok);
                         boost::beast::string_view key_str = target.substr(0, target.find("/"));
                         boost::beast::string_view val_str = target.substr(target.find("/")+1, target.size());
-                        cache.set((key_type) key_str, (Cache::val_type) &val_str, size);
-                        response_.result(http::status::ok);
+                        beast::ostream(response_.body())
+                            << key_str << " = " << val_str << "\n";
+                        cache.set((key_type) key_str, (Cache::val_type) val_str.data(), size);
                     } else {
                         response_.result(http::status::bad_request);
                         beast::ostream(response_.body())
@@ -109,6 +109,7 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                 case http::verb::delete_:
                     // DELETE /key
                     if (cache.del((key_type) target)) {
+                        response_.result(http::status::ok);
                         beast::ostream(response_.body())
                             << target
                             << " deleted\n";
@@ -133,9 +134,9 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                         beast::ostream(response_.body())
                             << "Cache Reset\n";
                     } else {
-                        response_.result(http::status::bad_request);
+                        response_.result(http::status::not_found);
                         beast::ostream(response_.body())
-                            << "usage: PUT /key/val \n";
+                            << "usage: POST /reset";
                     }
                     break;
                 default:
@@ -148,7 +149,7 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                         << "'\n";
                     break;
             }
-
+            response_.prepare_payload();
             write_response();
         }
 

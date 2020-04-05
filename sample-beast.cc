@@ -32,11 +32,9 @@ Cache cache(1000);
 
 class http_connection : public std::enable_shared_from_this<http_connection> {
     public:
-        http_connection(tcp::socket socket) : socket_(std::move(socket)) {
-        }
+        http_connection(tcp::socket socket) : socket_(std::move(socket)) { }
         // Initiate the asynchronous operations associated with the connection.
-        void start()
-        {
+        void start() {
             read_request();
         }
 
@@ -150,17 +148,14 @@ void http_server(tcp::acceptor& acceptor, tcp::socket& socket) {
 }
 
 int main(int argc, char* argv[]) {
-    try
-    {
+    try {
         int opt;
         Cache::size_type maxmem = 20;
         std::string host_string = "127.0.0.1";
         std::string port_string = "4000";
         int8_t threads = 0;
-        while((opt = getopt(argc, argv, "m:s:p:t:")) != -1)
-        {
-            switch(opt)
-            {
+        while((opt = getopt(argc, argv, "m:s:p:t:")) != -1) {
+            switch(opt) {
                 case 'm':
                     maxmem = atoi(optarg);
                     break;
@@ -189,8 +184,7 @@ int main(int argc, char* argv[]) {
 
         ioc.run();
     }
-    catch(std::exception const& e)
-    {
+    catch(std::exception const& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return EXIT_FAILURE;
     }

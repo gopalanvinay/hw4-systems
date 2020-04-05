@@ -92,13 +92,14 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                     }
                     break;
                 case http::verb::put:
+                    // PUT /key/val
                     //split by '=' buffer.body()
                     // need to fix this
-                    cache.set(key, val, size);
+                    cache.set((key_type) request_.target(), (Cache::val_type) val, size);
                     break;
                 case http::verb::delete_:
+                    // DELETE /key
                     response_.set(http::field::content_type, "text/plain");
-                    request_.erase(request_.begin());
                     if (cache.del((key_type) request_.target())) {
                         beast::ostream(response_.body())
                             << request_.target()
@@ -110,18 +111,24 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                     }
                     break;
                 case http::verb::head:
-                    response_.result(http::status::ok);
-                    response_.set(http::field::content_type, "application/json");
+                    // HEAD
+                    response_.set(http::field::content_type, "text/plain");
                     beast::ostream(response_.body())
-                        << "HTTP/1.1 200 OK'"
-                        << std::string(request_.method_string())
-                        << "'\n";
+                        << "HTTP/1.1 200 OK\n"
+                        << cache.space_used()
+                        << " space used\n";
                     break;
                 case http::verb::post:
-                    if (request_.target() == "reset") {
+                    // POST /reset
+                    if (request_.target() == "/reset") {
                         cache.reset();
+                        response_.set(http::field::content_type, "text/plain");
+                        beast::ostream(response_.body())
+                            << "Cache Reset\n";
                     } else {
-                        printf("NOT FOUND");
+                        response_.set(http::field::content_type, "text/plain");
+                        beast::ostream(response_.body())
+                            << "Invalid Target for POST\n";
                     }
                     break;
                 default:

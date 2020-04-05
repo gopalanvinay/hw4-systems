@@ -6,15 +6,12 @@ OBJ=$(SRC:.cc=.o)
 
 all:  cache_server test_cache_lib test_cache_client test_evictors
 
-sample_beast: cache_lib.o sample-beast.o
+cache_server: cache_server.o cache_lib.o
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 test_sample:
-	./test_beast -s 127.0.0.1 -p 4000& curl -I 127.0.0.1:4000
+	./cache_server -s 127.0.0.1 -p 4000& curl -I 127.0.0.1:4000
 	curl -X DELETE 127.0.0.1:4000/key
-
-cache_server: cache_server.o cache_lib.o
-	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
 
 test_evictors: test_evictors.o lru_evictor.o
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)

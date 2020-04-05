@@ -1,97 +1,127 @@
+//
+// Copyright (c) 2017 Christopher M. Kohlhoff (chris at kohlhoff dot com)
+//
+// Distributed under the Boost Software License, Version 1.0. (See accompanying
+// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+//
+// Official repository: https://github.com/boostorg/beast
+//
+
+//------------------------------------------------------------------------------
+//
+// Example: HTTP server, small
+//
+//------------------------------------------------------------------------------
+
 #include "cache.hh"
-#include <unistd.h>
-#include <stdio.h>
-#include <string>
-#include <assert.h>
-
-// Boost Libraries
 #include <boost/beast/core.hpp>
-#include <boost/algorithm/string/classification.hpp>
-
-#include <boost/algorithm/string/split.hpp>
-#include <boost/beast/websocket.hpp>
-#include <boost/asio/ip/tcp.hpp>
+#include <boost/beast/http.hpp>
+#include <boost/beast/version.hpp>
+#include <boost/asio.hpp>
 #include <cstdlib>
-#include <functional>
 #include <iostream>
-#include <thread>
+#include <memory>
+#include <string>
 
 namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
-namespace websocket = beast::websocket; // from <boost/beast/websocket.hpp>
 namespace net = boost::asio;            // from <boost/asio.hpp>
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
-//------------------------------------------------------------------------------
+Cache cache(1000);
 
+class http_connection : public std::enable_shared_from_this<http_connection> {
+    public:
+        http_connection(tcp::socket socket) : socket_(std::move(socket)) { }
+        // Initiate the asynchronous operations associated with the connection.
+        void start() {
+            read_request();
+        }
 
-// Echoes back all received WebSocket messages
-void do_session(tcp::socket& socket){
-    try
-    {
-        // Construct the stream by moving in the socket
-        websocket::stream<tcp::socket> ws{std::move(socket)};
+    private:
+        // The socket for the currently connected client.
+        tcp::socket socket_;
+        // The buffer for performing reads.
+        beast::flat_buffer buffer_{8192};
 
-        // Set a decorator to change the Server of the handshake
-        ws.set_option(websocket::stream_base::decorator(
-            [](websocket::response_type& res)
-            {
-                res.set(http::field::server,
-                    std::string(BOOST_BEAST_VERSION_STRING) +
-                        " websocket-server-sync");
-            }));
+        // The request message.
+        http::request<http::dynamic_body> request_;
 
-        // Accept the websocket handshake
-        ws.accept();
+        // The response message.
+        http::response<http::dynamic_body> response_;
 
-        for(;;)
-        {
-            // This buffer will hold the incoming message
-            beast::flat_buffer buffer;
-            //http::request<http::dynamic_body> request_;
-            // The socket for the currently connected client.
+        // Asynchronously receive a complete request message.
+        void read_request() {
+            auto self = shared_from_this();
 
-            // The request message.
-            http::request<http::dynamic_body> request_;
+            http::async_read(
+                socket_,
+                buffer_,
+                request_,
+                [self](beast::error_code ec, std::size_t bytes_transferred)
+                {
+                    boost::ignore_unused(bytes_transferred);
+                    if(!ec)
+                        self->process_request();
+                });
+        }
 
-            // The response message.
-            http::response<http::dynamic_body> response_;
-            // Read a message
-            ws.read(buffer);
-            // https://www.boost.org/doc/libs/master/libs/beast/example/http/server/small/http_server_small.cpp
-            switch(buffer.method())
-            {
+        // Determine what needs to be done with the request message.
+        void process_request() {
+            response_.version(request_.version());
+            response_.keep_alive(false);
+
+            key_type key;
+            Cache::val_type val;
+            Cache::size_type size = 0;
+            switch(request_.method()) {
                 case http::verb::get:
-                    Cache::size_type* size;
-                    Cache::val_type resp = cache.get(buffer.body(), size);
-                    if (resp == nullptr) {
-                        printf("KEY NOT IN CACHE"); // send over ws instead
+                    // GET /key
+                    response_.set(http::field::content_type, "text/plain");
+                    val = cache.get((key_type) request_.target(), size);
+                    if (val == nullptr) {
+                        beast::ostream(response_.body())
+                            << request_.target()
+                            << " isn't in the cache\n";
                     } else {
-                        printf("This is key");
+                        beast::ostream(response_.body())
+                            << request_.target()
+                            << " = "
+                            << val
+                            << " \n";
                     }
                     break;
                 case http::verb::put:
                     //split by '=' buffer.body()
-                    key_type key;
-                    val_type val;
-                    size_type size;
+                    // need to fix this
                     cache.set(key, val, size);
                     break;
                 case http::verb::delete_:
-                    if (cache.del(buffer.body())) {
-                        printf("%s deleted", buffer.body());
+                    response_.set(http::field::content_type, "text/plain");
+                    request_.erase(request_.begin());
+                    if (cache.del((key_type) request_.target())) {
+                        beast::ostream(response_.body())
+                            << request_.target()
+                            << " deleted\n";
                     } else {
-                        printf("not deleted");
+                        beast::ostream(response_.body())
+                            << request_.target()
+                            << " wasn't in the Cache\n";
                     }
                     break;
                 case http::verb::head:
-
+                    response_.result(http::status::ok);
+                    response_.set(http::field::content_type, "application/json");
+                    beast::ostream(response_.body())
+                        << "HTTP/1.1 200 OK'"
+                        << std::string(request_.method_string())
+                        << "'\n";
                     break;
                 case http::verb::post:
-                    if (buffer.body() == "reset") {
+                    if (request_.target() == "reset") {
                         cache.reset();
                     } else {
-                        return "NOT FOUND";
+                        printf("NOT FOUND");
                     }
                     break;
                 default:
@@ -102,93 +132,79 @@ void do_session(tcp::socket& socket){
                     beast::ostream(response_.body())
                         << "Invalid request-method '"
                         << std::string(request_.method_string())
-                        << "'";
+                        << "'\n";
                     break;
             }
-            // // print -> ws.write(message here)
-            Cache cache(100);
+
+            write_response();
         }
-    }
-    catch(beast::system_error const& se)
-    {
-        // This indicates that the session was closed
-        if(se.code() != websocket::error::closed)
-            std::cerr << "Error: " << se.code().message() << std::endl;
-    }
-    catch(std::exception const& e)
-    {
-        std::cerr << "Error: " << e.what() << std::endl;
-    }
+
+
+        // Asynchronously transmit the response message.
+        void write_response() {
+            auto self = shared_from_this();
+
+            response_.set(http::field::content_length, response_.body().size());
+
+            http::async_write(
+                socket_,
+                response_,
+                [self](beast::error_code ec, std::size_t)
+                {
+                    self->socket_.shutdown(tcp::socket::shutdown_send, ec);
+                });
+        }
+};
+
+// "Loop" forever accepting new connections.
+void http_server(tcp::acceptor& acceptor, tcp::socket& socket) {
+  acceptor.async_accept(socket, [&](beast::error_code ec)
+      {
+          if(!ec)
+              std::make_shared<http_connection>(std::move(socket))->start();
+          http_server(acceptor, socket);
+      });
 }
 
-//------------------------------------------------------------------------------
-
-int main(int argc, char* argv[])
-{
-    int opt;
-    Cache::size_type maxmem = 20;
-    std::string host_string = "127.0.0.1";
-    std::string port_string = "4000";
-    int8_t threads = 0;
-
-    while((opt = getopt(argc, argv, "m:s:p:t:")) != -1)
-    {
-        switch(opt)
-        {
-            case 'm':
-                maxmem = atoi(optarg);
-                break;
-            case 's':
-                host_string = optarg ;
-                break;
-            case 'p':
-                port_string = optarg;
-                break;
-            case 't':
-                threads = atoi(optarg);
-                break;
+int main(int argc, char* argv[]) {
+    try {
+        int opt;
+        Cache::size_type maxmem = 20;
+        std::string host_string = "127.0.0.1";
+        std::string port_string = "4000";
+        int8_t threads = 0;
+        while((opt = getopt(argc, argv, "m:s:p:t:")) != -1) {
+            switch(opt) {
+                case 'm':
+                    maxmem = atoi(optarg);
+                    break;
+                case 's':
+                    host_string = optarg ;
+                    break;
+                case 'p':
+                    port_string = optarg;
+                    break;
+                case 't':
+                    threads = atoi(optarg);
+                    break;
+            }
         }
-    }
+        // initialize cache
+        //Cache cache(maxmem);
 
-    // To stop compiler from complaining since threads is unused
-    threads += 5;
+        auto const address = net::ip::make_address(host_string.c_str());
+        unsigned short port = static_cast<unsigned short>(std::atoi(port_string.c_str()));
 
-    // Test to see getopt is working
-    Cache cache(maxmem);
-    cache.set("x","5",1);
-    Cache::size_type valsize;
-    assert(cache.get("x",valsize) == "5");
-
-    try
-    {
-        auto const address = net::ip::make_address(host_string);
-        // Convert port_string to const char * using c_str() method
-        auto const port = static_cast<unsigned short>(std::atoi(port_string.c_str()));
-
-        // The io_context is required for all I/O
         net::io_context ioc{1};
-
-        // The acceptor receives incoming connections
+        Cache cache(1000);
         tcp::acceptor acceptor{ioc, {address, port}};
-        for(;;)
-        {
-            // This will receive the new connection
-            tcp::socket socket{ioc};
+        tcp::socket socket{ioc};
+        http_server(acceptor, socket);
 
-            // Block until we get a connection
-            acceptor.accept(socket);
-
-            // Launch the session, transferring ownership of the socket
-            std::thread{std::bind(
-                &do_session,
-                std::move(socket))}.detach();
-        }
+        ioc.run();
     }
-    catch (const std::exception& e)
-    {
+    catch(std::exception const& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return EXIT_FAILURE;
     }
-
-    return EXIT_SUCCESS;
 }

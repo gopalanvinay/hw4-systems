@@ -70,22 +70,24 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
         void process_request() {
             response_.version(request_.version());
             response_.keep_alive(false);
+            response_.set(http::field::content_type, "text/plain");
 
             key_type key;
             Cache::val_type val;
             Cache::size_type size = 0;
+            boost::beast::string_view target = request_.target();
+            target.remove_prefix(1); // gets rid of / before target
             switch(request_.method()) {
                 case http::verb::get:
                     // GET /key
-                    response_.set(http::field::content_type, "text/plain");
-                    val = cache.get((key_type) request_.target(), size);
+                    val = cache.get((key_type) target, size);
                     if (val == nullptr) {
                         beast::ostream(response_.body())
-                            << request_.target()
+                            << target
                             << " isn't in the cache\n";
                     } else {
                         beast::ostream(response_.body())
-                            << request_.target()
+                            << target
                             << " = "
                             << val
                             << " \n";
@@ -93,26 +95,32 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                     break;
                 case http::verb::put:
                     // PUT /key/val
-                    //split by '=' buffer.body()
-                    // need to fix this
-                    cache.set((key_type) request_.target(), (Cache::val_type) val, size);
+                    if (target.find("/") != boost::beast::string_view::npos) {
+                        boost::beast::string_view key_str = target.substr(0, target.find("/"));
+                        boost::beast::string_view val_str = target.substr(target.find("/")+1, target.size());
+                        cache.set((key_type) key_str, (Cache::val_type) &val_str, size);
+                        response_.result(http::status::ok);
+                    } else {
+                        response_.result(http::status::bad_request);
+                        beast::ostream(response_.body())
+                            << "usage: PUT /key/val \n";
+                    }
                     break;
                 case http::verb::delete_:
                     // DELETE /key
-                    response_.set(http::field::content_type, "text/plain");
-                    if (cache.del((key_type) request_.target())) {
+                    if (cache.del((key_type) target)) {
                         beast::ostream(response_.body())
-                            << request_.target()
+                            << target
                             << " deleted\n";
                     } else {
+                        response_.result(http::status::bad_request);
                         beast::ostream(response_.body())
-                            << request_.target()
+                            << target
                             << " wasn't in the Cache\n";
                     }
                     break;
                 case http::verb::head:
                     // HEAD
-                    response_.set(http::field::content_type, "text/plain");
                     beast::ostream(response_.body())
                         << "HTTP/1.1 200 OK\n"
                         << cache.space_used()
@@ -120,22 +128,20 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                     break;
                 case http::verb::post:
                     // POST /reset
-                    if (request_.target() == "/reset") {
+                    if (target == "reset") {
                         cache.reset();
-                        response_.set(http::field::content_type, "text/plain");
                         beast::ostream(response_.body())
                             << "Cache Reset\n";
                     } else {
-                        response_.set(http::field::content_type, "text/plain");
+                        response_.result(http::status::bad_request);
                         beast::ostream(response_.body())
-                            << "Invalid Target for POST\n";
+                            << "usage: PUT /key/val \n";
                     }
                     break;
                 default:
                     // We return responses indicating an error if
                     // we do not recognize the request method.
                     response_.result(http::status::bad_request);
-                    response_.set(http::field::content_type, "text/plain");
                     beast::ostream(response_.body())
                         << "Invalid request-method '"
                         << std::string(request_.method_string())
@@ -211,7 +217,7 @@ int main(int argc, char* argv[]) {
         ioc.run();
     }
     catch(std::exception const& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
+        std::cerr << "Error: " << e.what() << "\n" << std::endl;
         return EXIT_FAILURE;
     }
 }

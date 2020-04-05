@@ -8,9 +8,10 @@ all:  cache_server test_cache_lib test_cache_client test_evictors
 
 cache_server: cache_server.o cache_lib.o
 	$(CXX) $(LDFLAGS) -o $@ $^ $(LIBS)
+	./cache_server -s 127.0.0.1 -p 4000&
 
 test_sample:
-	./cache_server -s 127.0.0.1 -p 4000& curl -I 127.0.0.1:4000
+	curl -I 127.0.0.1:4000
 	curl -X DELETE 127.0.0.1:4000/key
 
 test_evictors: test_evictors.o lru_evictor.o

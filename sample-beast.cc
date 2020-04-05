@@ -58,8 +58,7 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                 socket_,
                 buffer_,
                 request_,
-                [self](beast::error_code ec,
-                    std::size_t bytes_transferred)
+                [self](beast::error_code ec, std::size_t bytes_transferred)
                 {
                     boost::ignore_unused(bytes_transferred);
                     if(!ec)
@@ -77,26 +76,46 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
             Cache::size_type size = 0;
             switch(request_.method()) {
                 case http::verb::get:
+                    // GET /key
+                    response_.set(http::field::content_type, "text/plain");
                     val = cache.get((key_type) request_.target(), size);
                     if (val == nullptr) {
-                        printf("KEY NOT IN CACHE"); // send over ws instead
+                        beast::ostream(response_.body())
+                            << request_.target()
+                            << " isn't in the cache\n";
                     } else {
-                        printf("This is key");
+                        beast::ostream(response_.body())
+                            << request_.target()
+                            << " = "
+                            << val
+                            << " \n";
                     }
                     break;
                 case http::verb::put:
                     //split by '=' buffer.body()
+                    // need to fix this
                     cache.set(key, val, size);
                     break;
                 case http::verb::delete_:
+                    response_.set(http::field::content_type, "text/plain");
+                    request_.erase(request_.begin());
                     if (cache.del((key_type) request_.target())) {
-                        printf("key deleted");
+                        beast::ostream(response_.body())
+                            << request_.target()
+                            << " deleted\n";
                     } else {
-                        printf("not deleted");
+                        beast::ostream(response_.body())
+                            << request_.target()
+                            << " wasn't in the Cache\n";
                     }
                     break;
                 case http::verb::head:
-                    printf("do this");
+                    response_.result(http::status::ok);
+                    response_.set(http::field::content_type, "application/json");
+                    beast::ostream(response_.body())
+                        << "HTTP/1.1 200 OK'"
+                        << std::string(request_.method_string())
+                        << "'\n";
                     break;
                 case http::verb::post:
                     if (request_.target() == "reset") {
@@ -113,7 +132,7 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                     beast::ostream(response_.body())
                         << "Invalid request-method '"
                         << std::string(request_.method_string())
-                        << "'";
+                        << "'\n";
                     break;
             }
 
@@ -173,8 +192,8 @@ int main(int argc, char* argv[]) {
         // initialize cache
         //Cache cache(maxmem);
 
-        auto const address = net::ip::make_address(port_string.c_str());
-        unsigned short port = static_cast<unsigned short>(std::atoi(host_string.c_str()));
+        auto const address = net::ip::make_address(host_string.c_str());
+        unsigned short port = static_cast<unsigned short>(std::atoi(port_string.c_str()));
 
         net::io_context ioc{1};
         Cache cache(1000);

@@ -28,6 +28,14 @@ struct cache_item {
 class Cache::Impl {
     private:
         std::string host_, port_;
+        
+        // The io_context is required for all I/O
+        net::io_context ioc;
+
+        // These objects perform our I/O
+        tcp::resolver resolver{ioc};
+        websocket::stream<tcp::socket> ws{ioc};
+        beast::tcp_stream stream{ioc};
 
     public:
         // Add a <key, value> pair to the cache.
@@ -41,7 +49,9 @@ class Cache::Impl {
             req.method(beast::http::verb::put);
             req.target("/");
             req.set(beast::http::field::content_type, "application/x-www-form-urlencoded");
-            req.body() = key + "=" + val.str();
+            // Use string instead of char* value
+            std::string val_str = val;
+            req.body() = key + "=" + val;
             req.prepare_payload();
             std::string query = (boost::format("SET /%s/%d") % key % val).str();
             ws.write(net::buffer(query));
@@ -58,13 +68,14 @@ class Cache::Impl {
             req.set(beast::http::field::content_type, "application/x-www-form-urlencoded");
             req.body() = key;
             req.prepare_payload();
+            std::string query = (boost::format("GET /%s/") % key).str();
             ws.write(net::buffer(query));
             // This buffer will hold the incoming message
             beast::flat_buffer buffer;
             // Read a message into our buffer
             ws.read(buffer);
             // The make_printable() function helps print a ConstBufferSequence
-            beast::make_printable(buffer.data()) << std::endl;
+            beast::make_printable(buffer.data());
         }
 
         // Delete an object from the cache, if it's still there
@@ -76,6 +87,10 @@ class Cache::Impl {
             req.body() = "key=" + key;
             req.prepare_payload();
             ws.write(req);
+            // This buffer is used for reading and must be persisted
+            beast::flat_buffer buffer;
+            // Declare a container to hold the response
+            http::response<http::dynamic_body> res;
             // Receive the HTTP response
             http::read(stream, buffer, res);
             return true; // fix here
@@ -88,6 +103,10 @@ class Cache::Impl {
             req.target("/");
             req.prepare_payload();
             ws.write(req);
+            // This buffer is used for reading and must be persisted
+            beast::flat_buffer buffer;
+            // Declare a container to hold the response
+            http::response<http::dynamic_body> res;
             // Receive the HTTP response
             http::read(stream, buffer, res);
         }
@@ -114,15 +133,10 @@ class Cache::Impl {
         Impl(std::string host, std::string port) : host_(host), port_(port) 
         {
             try {
-                // The io_context is required for all I/O
-                net::io_context ioc;
-
-                // These objects perform our I/O
-                tcp::resolver resolver{ioc};
-                websocket::stream<tcp::socket> ws{ioc};
-
                 // Look up the domain name
-                auto const results = resolver.resolve(host, port);
+                auto const results = resolver.resolve(host_, port_);
+                // Make the connection on the IP address we get from a lookup
+                stream.connect(results);
 
                 // Make the connection on the IP address we get from a lookup
                 net::connect(ws.next_layer(), results.begin(), results.end());
@@ -143,6 +157,12 @@ class Cache::Impl {
                 std::cerr << "Error: " << e.what() << std::endl;
             }
         }
+
+        void close(){
+            // Close the WebSocket connection
+            // If we get here then the connection is closed gracefully
+            ws.close(websocket::close_code::normal);
+        }
 };
 
 // cache impl stuff
@@ -153,9 +173,7 @@ Cache::Cache(std::string host, std::string port)
     : pImpl_(new Impl(host, port)) {}
 
 Cache::~Cache() {
-    // Close the WebSocket connection
-    // If we get here then the connection is closed gracefully
-    ws.close(websocket::close_code::normal);
+    pImpl_->close();
 };
 
 void Cache::set(key_type key, val_type val, size_type size) {

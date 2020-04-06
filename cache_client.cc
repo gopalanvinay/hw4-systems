@@ -5,11 +5,15 @@
 #include <assert.h>
 
 // Boost Libraries
+
+
 #include <boost/beast/core.hpp>
-#include <boost/beast/websocket.hpp>
+#include <boost/beast/http.hpp>
+#include <boost/beast/version.hpp>
 #include <boost/asio/connect.hpp>
-#include <boost/asio/ip/tcp.hpp>
 #include <boost/format.hpp>
+#include <boost/asio/ip/tcp.hpp>
+#include <boost/beast/http/dynamic_body.hpp>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -29,15 +33,42 @@ class Cache::Impl {
     private:
         std::string host_, port_;
         
-        // The io_context is required for all I/O
-        net::io_context ioc;
-
         // These objects perform our I/O
+        net::io_context ioc;
         tcp::resolver resolver{ioc};
-        websocket::stream<tcp::socket> ws{ioc};
         beast::tcp_stream stream{ioc};
 
     public:
+        Impl(std::string host, std::string port) : host_(host), port_(port) 
+        {
+            try {
+                // Look up the domain name
+                auto const results = resolver.resolve(host_, port_);
+                // Make the connection on the IP address we get from a lookup
+                stream.connect(results);
+            }
+
+            //     // Make the connection on the IP address we get from a lookup
+            //     net::connect(ws.next_layer(), results.begin(), results.end());
+
+            //     // Set a decorator to change the User-Agent of the handshake
+            //     ws.set_option(websocket::stream_base::decorator(
+            //         [](websocket::request_type& req)
+            //         {
+            //             req.set(http::field::user_agent,
+            //                 std::string(BOOST_BEAST_VERSION_STRING) +
+            //                     " websocket-client-coro");
+            //         }));
+            //     // Perform the websocket handshake
+            //     ws.handshake(host, "/");
+            // }
+            catch(std::exception const& e)
+            {
+                std::cerr << "Error: " << e.what() << std::endl;
+            }
+        }
+
+
         // Add a <key, value> pair to the cache.
         // If key already exists, it will overwrite the old value.
         // Both the key and the value are to be deep-copied (not just pointer copied).
@@ -45,40 +76,72 @@ class Cache::Impl {
         // from the cache to accomodate the new value. If unable, the new value
         // isn't inserted to the cache.
         void set(key_type key, val_type val, size_type size) {
-            beast::http::request<beast::http::string_body> req;
+            http::request<beast::http::string_body> req;
             req.method(beast::http::verb::put);
             req.target("/");
             req.set(beast::http::field::content_type, "application/x-www-form-urlencoded");
-            // Use string instead of char* value
-            std::string val_str = val;
             req.body() = key + "=" + val;
             req.prepare_payload();
-            std::string query = (boost::format("SET /%s/%d") % key % val).str();
-            ws.write(net::buffer(query));
+
+            // Send the HTTP request to the remote host
+            http::write(stream, req);
+            // This buffer is used for reading and must be persisted
+            beast::flat_buffer buffer;
+            // Declare a container to hold the response
+            http::response<http::dynamic_body> res;
+            // Receive the HTTP response
+            http::read(stream, buffer, res);
+            // Write the message to standard out
+            std::cout << res << std::endl;
+
+            // std::string query = (boost::format("SET /%s/%d") % key % val).str();
+            // ws.write(net::buffer(query));
         }
         // doesnt do anything with size type yet
 
         // Retrieve a pointer to the value associated with key in the cache,
         // or nullptr if not found.
         // Sets the actual size of the returned value (in bytes) in val_size.
+
         val_type get(key_type key, size_type& val_size) const {
-            beast::http::request<beast::http::string_body> req;
+            http::request<http::string_body> req;
             req.method(beast::http::verb::get);
-            req.target("/");
-            req.set(beast::http::field::content_type, "application/x-www-form-urlencoded");
-            req.body() = key;
-            req.prepare_payload();
-            std::string query = (boost::format("GET /%s/") % key).str();
-            ws.write(net::buffer(query));
-            // This buffer will hold the incoming message
+            req.set(http::field::host, host_);
+            req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+
+            // Send the HTTP request to the remote host
+            http::write(stream, req);
+            // This buffer is used for reading and must be persisted
             beast::flat_buffer buffer;
-            // Read a message into our buffer
-            ws.read(buffer);
-            // The make_printable() function helps print a ConstBufferSequence
-            beast::make_printable(buffer.data());
+            // Declare a container to hold the response
+            http::response<http::dynamic_body> res;
+            // Receive the HTTP response
+            http::read(stream, buffer, res);
+            // Write the message to standard out
+            std::cout << res << std::endl;
+
+            val_type temp = "TEMP ANSWER";
+            return temp;
+
+            // beast::http::request<beast::http::string_body> req;
+            // req.method(beast::http::verb::get);
+            // req.target("/");
+            // req.set(beast::http::field::content_type, "application/x-www-form-urlencoded");
+            // req.body() = key;
+            // req.prepare_payload();
+            // std::string query = (boost::format("GET /%s/") % key).str();
+            // ws.write(net::buffer(query));
+            // // This buffer will hold the incoming message
+            // beast::flat_buffer buffer;
+            // // Read a message into our buffer
+            // ws.read(buffer);
+            // // The make_printable() function helps print a ConstBufferSequence
+            // beast::make_printable(buffer.data());
         }
 
         // Delete an object from the cache, if it's still there
+
+        /*
         bool del(key_type key) {
             beast::http::request<beast::http::string_body> req;
             req.method(beast::http::verb::delete_);
@@ -124,44 +187,22 @@ class Cache::Impl {
 
         // This function is used to test the resizing using max_load_factor
 
-        /*
+
         int get_bucket_count() const{
         return table.bucket_count();
         }
+
         */
 
-        Impl(std::string host, std::string port) : host_(host), port_(port) 
-        {
-            try {
-                // Look up the domain name
-                auto const results = resolver.resolve(host_, port_);
-                // Make the connection on the IP address we get from a lookup
-                stream.connect(results);
-
-                // Make the connection on the IP address we get from a lookup
-                net::connect(ws.next_layer(), results.begin(), results.end());
-
-                // Set a decorator to change the User-Agent of the handshake
-                ws.set_option(websocket::stream_base::decorator(
-                    [](websocket::request_type& req)
-                    {
-                        req.set(http::field::user_agent,
-                            std::string(BOOST_BEAST_VERSION_STRING) +
-                                " websocket-client-coro");
-                    }));
-                // Perform the websocket handshake
-                ws.handshake(host, "/");
-            }
-            catch(std::exception const& e)
-            {
-                std::cerr << "Error: " << e.what() << std::endl;
-            }
-        }
-
         void close(){
-            // Close the WebSocket connection
-            // If we get here then the connection is closed gracefully
-            ws.close(websocket::close_code::normal);
+            // Gracefully close the socket
+            beast::error_code ec;
+            stream.socket().shutdown(tcp::socket::shutdown_both, ec);
+
+            // not_connected happens sometimes
+            // so don't bother reporting it.
+            if(ec && ec != beast::errc::not_connected)
+                throw beast::system_error{ec};
         }
 };
 
@@ -187,6 +228,8 @@ Cache::val_type Cache::get(key_type key, Cache::size_type& val_size) const {
     return Cache::pImpl_->get(key, val_size);
 }
 
+/*
+
 // Delete an object from the cache, if it's still there
 bool Cache::del(key_type key){
     return Cache::pImpl_->del(key);
@@ -200,3 +243,5 @@ Cache::size_type Cache::space_used() const {
 void Cache::reset(){
     Cache::pImpl_->reset();
 }
+
+*/

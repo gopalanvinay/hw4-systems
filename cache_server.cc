@@ -87,7 +87,7 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                             << target << " isn't in the cache\n";
                     } else {
                         beast::ostream(response_.body())
-                            << "{key: "<< target << ", value: " << (std::string) val << " }\n";
+                            << "{key: "<< target << ", value: " << val << " }\n";
                     }
                     break;
                 case http::verb::put:
@@ -121,7 +121,7 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                 case http::verb::head:
                     // HEAD
                     beast::ostream(response_.body())
-                        << "HTTP/1.1 200 OK\n" << cache.space_used() << " space used\n";
+                        << "HTTP/1.1 200 OK\nSpace_used: " << cache.space_used() << "\n";
                     break;
                 case http::verb::post:
                     // POST /reset
@@ -148,7 +148,6 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
             response_.prepare_payload();
             write_response();
         }
-
 
         // Asynchronously transmit the response message.
         void write_response() {
@@ -209,6 +208,7 @@ int main(int argc, char* argv[]) {
         http_server(acceptor, socket, cache);
 
         ioc.run();
+        printf("ended");
     }
     catch(std::exception const& e) {
         std::cerr << "Error: " << e.what() << "\n" << std::endl;

@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include <algorithm>
 #include <functional>
+#include <iostream>
 
 #define BUCKET_COUNT 10
 
@@ -62,12 +63,10 @@ class Cache::Impl {
             // table.at() returns a reference to the value
             if (table.count(key) != 0) {
 
-                // testing resizing with max_load_factor stuff
-                /*
+                /* testing resizing with max_load_factor stuff
                 int x = this -> get_bucket_count();
                 std::cout << x << std::endl;
                 */
-
                 if (evictor != nullptr)
                     evictor->touch_key(key);
                 val_size = table.at(key).size;

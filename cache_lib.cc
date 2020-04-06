@@ -53,6 +53,7 @@ class Cache::Impl {
                 table[key] = item;
                 evictor->touch_key(key);
             }
+            std::cout << "("<< key << ": "<< table.at(key).val << " [" << table.at(key).size << "]) this is inside the set" << std::endl;
             // don't add into hash table
         }
 
@@ -67,7 +68,7 @@ class Cache::Impl {
                 int x = this -> get_bucket_count();
                 std::cout << x << std::endl;
                 */
-                std::cout << "("<< key << ": "<< table.at(key).val << " [" << table.at(key).size << "]) this is inside the cache" << std::endl;
+                std::cout << "("<< key << ": "<< table.at(key).val << " [" << table.at(key).size << "]) this is inside the get" << std::endl;
                 if (evictor != nullptr)
                     evictor->touch_key(key);
                 val_size = table.at(key).size;

@@ -5,8 +5,6 @@
 #include <assert.h>
 
 // Boost Libraries
-
-
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
@@ -106,6 +104,8 @@ class Cache::Impl {
         val_type get(key_type key, size_type& val_size) const {
             http::request<http::string_body> req;
             req.method(beast::http::verb::get);
+            req.target("/");
+            req.body() = key;
             req.set(http::field::host, host_);
             req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
 

@@ -1,4 +1,3 @@
-//
 // Copyright (c) 2017 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -6,12 +5,7 @@
 //
 // Official repository: https://github.com/boostorg/beast
 //
-
-//------------------------------------------------------------------------------
-//
 // Example: HTTP server, small
-//
-//------------------------------------------------------------------------------
 
 #include "cache.hh"
 #include <boost/beast/core.hpp>
@@ -28,19 +22,22 @@ namespace http = beast::http;           // from <boost/beast/http.hpp>
 namespace net = boost::asio;            // from <boost/asio.hpp>
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
-
 class http_connection : public std::enable_shared_from_this<http_connection> {
     public:
-        http_connection(tcp::socket socket) : socket_(std::move(socket)) {
+        http_connection(tcp::socket socket, Cache& cache) : socket_(std::move(socket)), cache(cache) {
         }
         // Initiate the asynchronous operations associated with the connection.
-        void start(Cache& cache) {
-            read_request(cache);
+        void start() {
+            read_request();
         }
 
     private:
         // The socket for the currently connected client.
         tcp::socket socket_;
+
+        // The cache object
+        Cache& cache;
+
         // The buffer for performing reads.
         beast::flat_buffer buffer_{8192};
 
@@ -51,23 +48,23 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
         http::response<http::dynamic_body> response_;
 
         // Asynchronously receive a complete request message.
-        void read_request(Cache& cache) {
+        void read_request() {
             auto self = shared_from_this();
 
             http::async_read(
                 socket_,
                 buffer_,
                 request_,
-                [self, &cache](beast::error_code ec, std::size_t bytes_transferred)
+                [self](beast::error_code ec, std::size_t bytes_transferred)
                 {
                     boost::ignore_unused(bytes_transferred);
                     if(!ec)
-                        self->process_request(cache);
+                        self->process_request();
                 });
         }
 
         // Determine what needs to be done with the request message.
-        void process_request(Cache& cache) {
+        void process_request() {
             response_.version(request_.version());
             response_.keep_alive(false);
             response_.set(http::field::content_type, "text/plain");
@@ -87,7 +84,7 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                             << target << " isn't in the cache\n";
                     } else {
                         beast::ostream(response_.body())
-                            << "{key: "<< target << ", value: " << *val << " }\n";
+                            << "{key: "<< target << ", value: " << val << " }\n";
                     }
                     break;
                 case http::verb::put:
@@ -96,10 +93,9 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                         response_.result(http::status::ok);
                         boost::beast::string_view key_str = target.substr(0, target.find("/"));
                         boost::beast::string_view val_str = target.substr(target.find("/")+1, target.size());
-                        std::string str{val_str};
                         beast::ostream(response_.body())
-                            << key_str << " = " << str.c_str() << "\n";
-                        cache.set((key_type) key_str, &str[0], str.size());
+                            << key_str << " = " << val_str.data() << "\n";
+                        cache.set((key_type) key_str, val_str.data(), val_str.size());
                     } else {
                         response_.result(http::status::bad_request);
                         beast::ostream(response_.body())
@@ -155,7 +151,6 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
             auto self = shared_from_this();
 
             response_.set(http::field::content_length, response_.body().size());
-
             http::async_write(
                 socket_,
                 response_,
@@ -171,7 +166,7 @@ void http_server(tcp::acceptor& acceptor, tcp::socket& socket, Cache& cache) {
   acceptor.async_accept(socket, [&](beast::error_code ec)
       {
           if(!ec)
-              std::make_shared<http_connection>(std::move(socket))->start(cache);
+              std::make_shared<http_connection>(std::move(socket), cache)->start();
           http_server(acceptor, socket, cache);
       });
 }
@@ -209,7 +204,6 @@ int main(int argc, char* argv[]) {
         http_server(acceptor, socket, cache);
 
         ioc.run();
-        printf("ended");
     }
     catch(std::exception const& e) {
         std::cerr << "Error: " << e.what() << "\n" << std::endl;

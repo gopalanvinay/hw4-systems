@@ -32,7 +32,7 @@ class Cache::Impl {
         // from the cache to accomodate the new value. If unable, the new value
         // isn't inserted to the cache.
         void set(key_type key, val_type val, size_type size) {
-            if (space_used() + size <= maxmem || table.count(key) != 0) {
+            if (space_used() + size <= maxmem) {
                 size_type tmp_size;
                 if (get(key, tmp_size) != nullptr)
                     cur_size -= tmp_size;
@@ -67,10 +67,10 @@ class Cache::Impl {
                 int x = this -> get_bucket_count();
                 std::cout << x << std::endl;
                 */
+                std::cout << "("<< key << ": "<< table.at(key).val << " [" << table.at(key).size << "]) this is inside the cache" << std::endl;
                 if (evictor != nullptr)
                     evictor->touch_key(key);
                 val_size = table.at(key).size;
-
                 return table.at(key).val;
             } else {
                 return nullptr;

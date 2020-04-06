@@ -28,14 +28,14 @@ namespace http = beast::http;           // from <boost/beast/http.hpp>
 namespace net = boost::asio;            // from <boost/asio.hpp>
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 
-Cache cache(1000);
 
 class http_connection : public std::enable_shared_from_this<http_connection> {
     public:
-        http_connection(tcp::socket socket) : socket_(std::move(socket)) { }
+        http_connection(tcp::socket socket) : socket_(std::move(socket)) {
+        }
         // Initiate the asynchronous operations associated with the connection.
-        void start() {
-            read_request();
+        void start(Cache& cache) {
+            read_request(cache);
         }
 
     private:
@@ -51,23 +51,23 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
         http::response<http::dynamic_body> response_;
 
         // Asynchronously receive a complete request message.
-        void read_request() {
+        void read_request(Cache& cache) {
             auto self = shared_from_this();
 
             http::async_read(
                 socket_,
                 buffer_,
                 request_,
-                [self](beast::error_code ec, std::size_t bytes_transferred)
+                [self, &cache](beast::error_code ec, std::size_t bytes_transferred)
                 {
                     boost::ignore_unused(bytes_transferred);
                     if(!ec)
-                        self->process_request();
+                        self->process_request(cache);
                 });
         }
 
         // Determine what needs to be done with the request message.
-        void process_request() {
+        void process_request(Cache& cache) {
             response_.version(request_.version());
             response_.keep_alive(false);
             response_.set(http::field::content_type, "text/plain");
@@ -84,11 +84,10 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                     if (val == nullptr) {
                         response_.result(http::status::bad_request);
                         beast::ostream(response_.body())
-                            << target
-                            << " isn't in the cache\n";
+                            << target << " isn't in the cache\n";
                     } else {
                         beast::ostream(response_.body())
-                            << "{key: "<< target << ", value: "<< val << " }\n";
+                            << "{key: "<< target << ", value: " << (std::string) val << " }\n";
                     }
                     break;
                 case http::verb::put:
@@ -97,9 +96,10 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                         response_.result(http::status::ok);
                         boost::beast::string_view key_str = target.substr(0, target.find("/"));
                         boost::beast::string_view val_str = target.substr(target.find("/")+1, target.size());
+                        std::string str{val_str};
                         beast::ostream(response_.body())
-                            << key_str << " = " << val_str << "\n";
-                        cache.set((key_type) key_str, (Cache::val_type) val_str.data(), size);
+                            << key_str << " = " << str.c_str() << "\n";
+                        cache.set((key_type) key_str, str.c_str(), str.size());
                     } else {
                         response_.result(http::status::bad_request);
                         beast::ostream(response_.body())
@@ -111,21 +111,17 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                     if (cache.del((key_type) target)) {
                         response_.result(http::status::ok);
                         beast::ostream(response_.body())
-                            << target
-                            << " deleted\n";
+                            << target << " deleted\n";
                     } else {
                         response_.result(http::status::bad_request);
                         beast::ostream(response_.body())
-                            << target
-                            << " wasn't in the Cache\n";
+                            << target << " wasn't in the Cache\n";
                     }
                     break;
                 case http::verb::head:
                     // HEAD
                     beast::ostream(response_.body())
-                        << "HTTP/1.1 200 OK\n"
-                        << cache.space_used()
-                        << " space used\n";
+                        << "HTTP/1.1 200 OK\n" << cache.space_used() << " space used\n";
                     break;
                 case http::verb::post:
                     // POST /reset
@@ -171,12 +167,12 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
 };
 
 // "Loop" forever accepting new connections.
-void http_server(tcp::acceptor& acceptor, tcp::socket& socket) {
+void http_server(tcp::acceptor& acceptor, tcp::socket& socket, Cache& cache) {
   acceptor.async_accept(socket, [&](beast::error_code ec)
       {
           if(!ec)
-              std::make_shared<http_connection>(std::move(socket))->start();
-          http_server(acceptor, socket);
+              std::make_shared<http_connection>(std::move(socket))->start(cache);
+          http_server(acceptor, socket, cache);
       });
 }
 
@@ -203,17 +199,14 @@ int main(int argc, char* argv[]) {
                     break;
             }
         }
-        // initialize cache
-        //Cache cache(maxmem);
-
         auto const address = net::ip::make_address(host_string.c_str());
         unsigned short port = static_cast<unsigned short>(std::atoi(port_string.c_str()));
 
         net::io_context ioc{1};
-        Cache cache(1000);
+        Cache cache(maxmem);
         tcp::acceptor acceptor{ioc, {address, port}};
         tcp::socket socket{ioc};
-        http_server(acceptor, socket);
+        http_server(acceptor, socket, cache);
 
         ioc.run();
     }

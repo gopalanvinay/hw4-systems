@@ -32,6 +32,9 @@ class Cache::Impl {
         // isn't inserted to the cache.
         void set(key_type key, val_type val, size_type size) {
             if (space_used() + size <= maxmem || table.count(key) != 0) {
+                size_type tmp_size;
+                if (get(key, tmp_size) != nullptr)
+                    cur_size -= tmp_size;
                 cur_size += size;
                 cache_item item;
                 item.val = val;

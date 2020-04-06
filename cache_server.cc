@@ -87,7 +87,7 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                             << target << " isn't in the cache\n";
                     } else {
                         beast::ostream(response_.body())
-                            << "{key: "<< target << ", value: " << val << " }\n";
+                            << "{key: "<< target << ", value: " << *val << " }\n";
                     }
                     break;
                 case http::verb::put:
@@ -99,7 +99,7 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                         std::string str{val_str};
                         beast::ostream(response_.body())
                             << key_str << " = " << str.c_str() << "\n";
-                        cache.set((key_type) key_str, str.c_str(), str.size());
+                        cache.set((key_type) key_str, &str[0], str.size());
                     } else {
                         response_.result(http::status::bad_request);
                         beast::ostream(response_.body())
@@ -121,7 +121,8 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                 case http::verb::head:
                     // HEAD
                     beast::ostream(response_.body())
-                        << "HTTP/1.1 200 OK\nSpace_used: " << cache.space_used() << "\n";
+                        << "HTTP/1.1 200 OK\nSpace_used: "
+                        << cache.space_used() << "\n";
                     break;
                 case http::verb::post:
                     // POST /reset

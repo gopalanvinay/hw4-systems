@@ -1,3 +1,4 @@
+//
 // Copyright (c) 2017 Christopher M. Kohlhoff (chris at kohlhoff dot com)
 //
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
@@ -5,7 +6,12 @@
 //
 // Official repository: https://github.com/boostorg/beast
 //
+
+//------------------------------------------------------------------------------
+//
 // Example: HTTP server, small
+//
+//------------------------------------------------------------------------------
 
 #include "cache.hh"
 #include <boost/beast/core.hpp>
@@ -21,6 +27,7 @@ namespace beast = boost::beast;         // from <boost/beast.hpp>
 namespace http = beast::http;           // from <boost/beast/http.hpp>
 namespace net = boost::asio;            // from <boost/asio.hpp>
 using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
+
 
 class http_connection : public std::enable_shared_from_this<http_connection> {
     public:
@@ -93,9 +100,10 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                         response_.result(http::status::ok);
                         boost::beast::string_view key_str = target.substr(0, target.find("/"));
                         boost::beast::string_view val_str = target.substr(target.find("/")+1, target.size());
+                        std::string str{val_str};
                         beast::ostream(response_.body())
-                            << key_str << " = " << val_str.data() << "\n";
-                        cache.set((key_type) key_str, val_str.data(), val_str.size());
+                            << key_str << " = " << str.c_str() << "\n";
+                        cache.set((key_type) key_str, str.c_str(), str.size());
                     } else {
                         response_.result(http::status::bad_request);
                         beast::ostream(response_.body())
@@ -151,6 +159,7 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
             auto self = shared_from_this();
 
             response_.set(http::field::content_length, response_.body().size());
+
             http::async_write(
                 socket_,
                 response_,

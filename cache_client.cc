@@ -26,6 +26,9 @@ struct cache_item {
 };
 
 class Cache::Impl {
+    private:
+        std::string host_, port_;
+
     public:
         // Add a <key, value> pair to the cache.
         // If key already exists, it will overwrite the old value.
@@ -108,7 +111,8 @@ class Cache::Impl {
         }
         */
 
-        Impl(std::string host, std::string port : host(host), port(port)) {
+        Impl(std::string host, std::string port) : host_(host), port_(port) 
+        {
             try {
                 // The io_context is required for all I/O
                 net::io_context ioc;
@@ -137,7 +141,6 @@ class Cache::Impl {
             catch(std::exception const& e)
             {
                 std::cerr << "Error: " << e.what() << std::endl;
-                return EXIT_FAILURE;
             }
         }
 };

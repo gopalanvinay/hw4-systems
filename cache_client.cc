@@ -46,9 +46,6 @@ class Cache::Impl {
                 auto const results = resolver.resolve(host_, port_);
                 // Make the connection on the IP address we get from a lookup
                 stream.connect(results);
-
-                // Send the HTTP request to the remote host
-                http::write(stream, req);
             }
             catch(std::exception const& e)
             {
@@ -66,6 +63,7 @@ class Cache::Impl {
             boost::string_view str { (boost::format("/%s/%s")% key % val).str() };
             req.method(http::verb::put);
             req.target(str);
+            req.keep_alive(true);
             http::write(stream, req);
             std::cout << size << std::endl;
         }
@@ -81,7 +79,7 @@ class Cache::Impl {
             req.target(str);
             http::write(stream, req);
             beast::flat_buffer buffer;
-            http::read(stream, buffer, res);
+            //http::read(stream, buffer, res);
             // Write the message to standard out
             std::cout << res << val_size << std::endl;
             val_type temp = "TEMP ANSWER";

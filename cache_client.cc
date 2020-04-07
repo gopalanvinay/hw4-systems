@@ -30,42 +30,31 @@ struct cache_item {
 class Cache::Impl {
     private:
         std::string host_, port_;
-        
+
         // These objects perform our I/O
         net::io_context ioc;
         tcp::resolver resolver{ioc};
         beast::tcp_stream stream{ioc};
 
+        beast::http::request<http::empty_body> req;
+        beast::http::request<http::string_body> res;
     public:
-        Impl(std::string host, std::string port) : host_(host), port_(port) 
+        Impl(std::string host, std::string port) : host_(host), port_(port)
         {
             try {
                 // Look up the domain name
                 auto const results = resolver.resolve(host_, port_);
                 // Make the connection on the IP address we get from a lookup
                 stream.connect(results);
+
+                // Send the HTTP request to the remote host
+                http::write(stream, req);
             }
-
-            //     // Make the connection on the IP address we get from a lookup
-            //     net::connect(ws.next_layer(), results.begin(), results.end());
-
-            //     // Set a decorator to change the User-Agent of the handshake
-            //     ws.set_option(websocket::stream_base::decorator(
-            //         [](websocket::request_type& req)
-            //         {
-            //             req.set(http::field::user_agent,
-            //                 std::string(BOOST_BEAST_VERSION_STRING) +
-            //                     " websocket-client-coro");
-            //         }));
-            //     // Perform the websocket handshake
-            //     ws.handshake(host, "/");
-            // }
             catch(std::exception const& e)
             {
                 std::cerr << "Error: " << e.what() << std::endl;
             }
         }
-
 
         // Add a <key, value> pair to the cache.
         // If key already exists, it will overwrite the old value.
@@ -74,26 +63,11 @@ class Cache::Impl {
         // from the cache to accomodate the new value. If unable, the new value
         // isn't inserted to the cache.
         void set(key_type key, val_type val, size_type size) {
-            http::request<beast::http::string_body> req;
-            req.method(beast::http::verb::put);
-            req.target("/");
-            req.set(beast::http::field::content_type, "application/x-www-form-urlencoded");
-            req.body() = key + "=" + val;
-            req.prepare_payload();
-
-            // Send the HTTP request to the remote host
+            boost::string_view str { (boost::format("/%s/%s")% key % val).str() };
+            req.method(http::verb::put);
+            req.target(str);
             http::write(stream, req);
-            // This buffer is used for reading and must be persisted
-            beast::flat_buffer buffer;
-            // Declare a container to hold the response
-            http::response<http::dynamic_body> res;
-            // Receive the HTTP response
-            http::read(stream, buffer, res);
-            // Write the message to standard out
-            std::cout << res << std::endl;
-
-            // std::string query = (boost::format("SET /%s/%d") % key % val).str();
-            // ws.write(net::buffer(query));
+            std::cout << size << std::endl;
         }
         // doesnt do anything with size type yet
 
@@ -101,46 +75,20 @@ class Cache::Impl {
         // or nullptr if not found.
         // Sets the actual size of the returned value (in bytes) in val_size.
 
-        val_type get(key_type key, size_type& val_size) const {
-            http::request<http::string_body> req;
-            req.method(beast::http::verb::get);
-            req.target("/");
-            req.body() = key;
-            req.set(http::field::host, host_);
-            req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-
-            // Send the HTTP request to the remote host
+        val_type get(key_type key, size_type& val_size) {
+            boost::string_view str { (boost::format("/%s")% key).str() };
+            req.method(http::verb::get);
+            req.target(str);
             http::write(stream, req);
-            // This buffer is used for reading and must be persisted
             beast::flat_buffer buffer;
-            // Declare a container to hold the response
-            http::response<http::dynamic_body> res;
-            // Receive the HTTP response
             http::read(stream, buffer, res);
             // Write the message to standard out
-            std::cout << res << std::endl;
-
+            std::cout << res << val_size << std::endl;
             val_type temp = "TEMP ANSWER";
             return temp;
-
-            // beast::http::request<beast::http::string_body> req;
-            // req.method(beast::http::verb::get);
-            // req.target("/");
-            // req.set(beast::http::field::content_type, "application/x-www-form-urlencoded");
-            // req.body() = key;
-            // req.prepare_payload();
-            // std::string query = (boost::format("GET /%s/") % key).str();
-            // ws.write(net::buffer(query));
-            // // This buffer will hold the incoming message
-            // beast::flat_buffer buffer;
-            // // Read a message into our buffer
-            // ws.read(buffer);
-            // // The make_printable() function helps print a ConstBufferSequence
-            // beast::make_printable(buffer.data());
         }
 
         // Delete an object from the cache, if it's still there
-
         /*
         bool del(key_type key) {
             beast::http::request<beast::http::string_body> req;

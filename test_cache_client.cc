@@ -13,6 +13,7 @@ int main() {
         cache.set("me","10", 2);
         cache.set("too","2", 1);
         cache.set("null","", 0);
+        cache.set("exceed","11111111111111111111111111111", 30); //should not be set
         std::cout << "SET successful" << std::endl;
         Cache::size_type s;
         std::string res = "two";
@@ -27,6 +28,7 @@ int main() {
         assert(s == 1);
         assert(cache.get("null", s) == res);
         assert(s == 0);
+        assert(cache.get("exceed", s) == nullptr); // should not be in cache
         std::cout << "GET successful" << std::endl;
         assert(cache.del("hello") == true);
         assert(cache.get("hello", s) == nullptr);

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string>
 #include <assert.h>
+#include <stdlib.h>     /* atoi */
 
 // Boost Libraries
 #include <boost/beast/core.hpp>
@@ -38,23 +39,10 @@ class Cache::Impl {
         beast::tcp_stream stream{ioc};
 
         beast::http::request<http::empty_body> req;
-        http::response<http::string_body> res;
         beast::flat_buffer buffer;
 
     public:
-        Impl(std::string host, std::string port) : host_(host), port_(port)
-        {/*
-            try {
-                // Look up the domain name
-                auto const results = resolver.resolve(host_, port_);
-                // Make the connection on the IP address we get from a lookup
-                stream.connect(results);
-            }
-            catch(std::exception const& e)
-            {
-                std::cerr << "Error: " << e.what() << std::endl;
-            }
-        */}
+        Impl(std::string host, std::string port) : host_(host), port_(port) {}
         void connect() {
             try {
                 // Look up the domain name
@@ -72,10 +60,8 @@ class Cache::Impl {
             // Gracefully close the socket
             beast::error_code ec;
             stream.socket().shutdown(tcp::socket::shutdown_both, ec);
-
             // not_connected happens sometimes
             // so don't bother reporting it.
-            //
             if(ec && ec != beast::errc::not_connected)
                 throw beast::system_error{ec};
         }
@@ -100,7 +86,6 @@ class Cache::Impl {
         // Retrieve a pointer to the value associated with key in the cache,
         // or nullptr if not found.
         // Sets the actual size of the returned value (in bytes) in val_size.
-
         val_type get(key_type key, size_type& val_size) {
             std::ignore = val_size; // implement later
             connect();
@@ -108,10 +93,14 @@ class Cache::Impl {
             req.method(http::verb::get);
             req.target(str);
             http::write(stream, req);
+            http::response<http::string_body> res;
             http::read(stream, buffer, res);
+            std::vector<std::string> vec;
+            boost::split(vec, res.body(), boost::is_any_of("{}= "));
             disconnect();
+            //std::cout << vec[0] << vec[1] << vec[2] << vec[3] << vec[4];
             if (res.result() == http::status::ok) {
-                return (val_type) "todo";
+                return (val_type) vec[4].c_str();
             } else {
                 return nullptr;
             }
@@ -124,10 +113,10 @@ class Cache::Impl {
             req.method(http::verb::delete_);
             req.target(str);
             http::write(stream, req);
-            // Receive the HTTP response
+            http::response<http::string_body> res;
             http::read(stream, buffer, res);
             disconnect();
-            return res.result() == http::status::ok; // fix here
+            return res.result() == http::status::ok; // if key exists
         }
 
         // Compute the total amount of memory used up by all cache values (not keys)
@@ -135,10 +124,13 @@ class Cache::Impl {
             connect();
             req.method(http::verb::head);
             http::write(stream, req);
+            http::response<http::string_body> res;
             http::read(stream, buffer, res);
             assert(res.result() == http::status::ok);
             disconnect();
-            return 100;
+            std::vector<std::string> vec;
+            boost::split(vec, res.body(), boost::is_any_of(" "));
+            return atoi(vec[1].c_str());
         }
 
         // Delete all data from the cache
@@ -147,6 +139,7 @@ class Cache::Impl {
             req.method(http::verb::post);
             req.target("/reset");
             http::write(stream, req);
+            http::response<http::string_body> res;
             http::read(stream, buffer, res);
             assert(res.result() == http::status::ok);
             disconnect();

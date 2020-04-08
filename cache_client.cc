@@ -98,7 +98,6 @@ class Cache::Impl {
             std::vector<std::string> vec;
             boost::split(vec, res.body(), boost::is_any_of("{}= "));
             disconnect();
-            //std::cout << vec[0] << vec[1] << vec[2] << vec[3] << vec[4];
             if (res.result() == http::status::ok) {
                 return (val_type) vec[4].c_str();
             } else {

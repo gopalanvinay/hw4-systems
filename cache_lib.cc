@@ -38,7 +38,11 @@ class Cache::Impl {
                     cur_size -= tmp_size;
                 cur_size += size;
                 cache_item item;
-                item.val = val;
+                size_t len = strlen(val)+1;
+                char* pointer;
+                pointer = new char[len];
+                strcpy(pointer,val);
+                item.val = pointer;
                 item.size = size;
                 table[key] = item;
                 if (evictor != nullptr)
@@ -48,13 +52,15 @@ class Cache::Impl {
                 this -> del(to_evict);
                 cur_size += size;
                 cache_item item;
-                item.val = val;
+                size_t len = strlen(val)+1;
+                char* pointer;
+                pointer = new char[len];
+                strcpy(pointer,val);
+                item.val = pointer;
                 item.size = size;
                 table[key] = item;
                 evictor->touch_key(key);
             }
-            std::cout << "("<< key << ": "<< table.at(key).val << " [" << table.at(key).size << "]) this is inside the set" << std::endl;
-            // don't add into hash table
         }
 
         // Retrieve a pointer to the value associated with key in the cache,
@@ -63,12 +69,6 @@ class Cache::Impl {
         val_type get(key_type key, size_type& val_size) const {
             // table.at() returns a reference to the value
             if (table.count(key) != 0) {
-
-                /* testing resizing with max_load_factor stuff
-                int x = this -> get_bucket_count();
-                std::cout << x << std::endl;
-                */
-                std::cout << "("<< key << ": "<< table.at(key).val << " [" << table.at(key).size << "]) this is inside the get" << std::endl;
                 if (evictor != nullptr)
                     evictor->touch_key(key);
                 val_size = table.at(key).size;
@@ -125,7 +125,7 @@ Cache::Cache(size_type maxmem,
             hash_func hasher)
     : pImpl_(new Impl(maxmem, max_load_factor, evictor, hasher)) {}
 
-Cache::~Cache() = default;
+Cache::~Cache() { };
 
 void Cache::set(key_type key, val_type val, size_type size) {
     Cache::pImpl_->set(key, val, size);

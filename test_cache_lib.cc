@@ -12,10 +12,11 @@ void test_set() {
     for (int i=0; i < 20; i++) {
         ::obj.set(std::to_string(i), "1", 1);
     }
-    assert(::obj.get("1", val_size) == "1");
-    assert(::obj.get("19", val_size) == "1");
-    assert(::obj.get("8", val_size) == "1");
-    assert(::obj.get("15", val_size) == "1"); // change key
+    std::string x = "1";
+    assert(::obj.get("1", val_size) == x);
+    assert(::obj.get("19", val_size) == x);
+    assert(::obj.get("8", val_size) == x);
+    assert(::obj.get("15", val_size) == x); // change key
 }
 
 void test_get() {

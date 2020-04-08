@@ -8,16 +8,19 @@ int main() {
     try {
         Cache cache("127.0.0.1","4000");
         std::cout << "Connection sucsessful" << std::endl;
-        cache.set("hello","1", 1);
+        cache.set("hello","two", 1);
         cache.set("me","10", 2);
         cache.set("too","2", 1);
         std::cout << "SET sucsessful" << std::endl;
         Cache::size_type s;
         std::cout << "GET sucsessful : " << cache.get("hello", s) << std::endl;
+        std::string res = "two";
+        assert(cache.get("hello", s) == res);
         assert(cache.del("hello") == true);
         assert(cache.del("empty") == false);
         std::cout << "DEL sucsessful" << std::endl;
-        std::cout << "Space_used "<< cache.space_used() << std::endl;
+        assert(cache.space_used() == 3);
+        std::cout << "Space_used sucsessful" << std::endl;
         cache.reset();
         std::cout << "RESET sucsessful" << std::endl;
     } catch(std::exception const& e){

@@ -103,8 +103,8 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                         boost::beast::string_view val_str = target.substr(target.find("/")+1, target.size());
                         std::string str{val_str};
                         beast::ostream(response_.body())
-                            << key_str << "=" << str.c_str();
-                        cache.set((key_type) key_str, str.c_str(), str.size());
+                            << key_str << "=" << str;
+                        cache.set((key_type) key_str, str.data(), str.size());
                     } else {
                         response_.result(http::status::bad_request);
                         beast::ostream(response_.body())

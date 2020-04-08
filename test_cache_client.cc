@@ -16,9 +16,12 @@ int main() {
         std::string res = "two";
         assert(cache.get("hello", s) == res);
         res = "10";
+        assert(s == 3);
         assert(cache.get("me", s) == res);
         res = "2";
+        assert(s == 2);
         assert(cache.get("too", s) == res);
+        assert(s == 1);
         std::cout << "GET successful" << std::endl;
         assert(cache.del("hello") == true);
         assert(cache.get("hello", s) == nullptr);

@@ -87,7 +87,6 @@ class Cache::Impl {
         // or nullptr if not found.
         // Sets the actual size of the returned value (in bytes) in val_size.
         val_type get(key_type key, size_type& val_size) {
-            std::ignore = val_size; // implement later
             connect();
             boost::string_view str { (boost::format("/%s")% key).str() };
             req.method(http::verb::get);
@@ -98,6 +97,7 @@ class Cache::Impl {
             std::vector<std::string> vec;
             boost::split(vec, res.body(), boost::is_any_of("{}= "));
             disconnect();
+            val_size = (vec[4]).size();
             if (res.result() == http::status::ok) {
                 return (val_type) vec[4].c_str();
             } else {

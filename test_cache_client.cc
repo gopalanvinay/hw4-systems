@@ -1,6 +1,7 @@
 #include "cache.hh"
 #include <cstdlib>
 #include <iostream>
+#include <assert.h>
 
 // Main
 int main() {
@@ -11,6 +12,7 @@ int main() {
         cache.set("hello","two", 3);
         cache.set("me","10", 2);
         cache.set("too","2", 1);
+        cache.set("null","", 0);
         std::cout << "SET successful" << std::endl;
         Cache::size_type s;
         std::string res = "two";
@@ -21,7 +23,10 @@ int main() {
         res = "2";
         assert(s == 2);
         assert(cache.get("too", s) == res);
+        res = "";
         assert(s == 1);
+        assert(cache.get("null", s) == res);
+        assert(s == 0);
         std::cout << "GET successful" << std::endl;
         assert(cache.del("hello") == true);
         assert(cache.get("hello", s) == nullptr);

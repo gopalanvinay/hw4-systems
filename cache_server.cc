@@ -88,10 +88,11 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                     if (val == nullptr) {
                         response_.result(http::status::bad_request);
                         beast::ostream(response_.body())
-                            << target << " isn't in the cache\n";
+                            << target << " isn't in the cache";
                     } else {
+                        response_.result(http::status::ok);
                         beast::ostream(response_.body())
-                            << "{key: "<< target << ", value: " << val << " }\n";
+                            << "{key: "<< target << ", value: " << val << " }";
                     }
                     break;
                 case http::verb::put:
@@ -102,7 +103,7 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                         boost::beast::string_view val_str = target.substr(target.find("/")+1, target.size());
                         std::string str{val_str};
                         beast::ostream(response_.body())
-                            << key_str << " = " << str.c_str() << "\n";
+                            << key_str << "=" << str.c_str();
                         cache.set((key_type) key_str, str.c_str(), str.size());
                     } else {
                         response_.result(http::status::bad_request);
@@ -115,25 +116,27 @@ class http_connection : public std::enable_shared_from_this<http_connection> {
                     if (cache.del((key_type) target)) {
                         response_.result(http::status::ok);
                         beast::ostream(response_.body())
-                            << target << " deleted\n";
+                            << target << " deleted";
                     } else {
                         response_.result(http::status::bad_request);
                         beast::ostream(response_.body())
-                            << target << " wasn't in the Cache\n";
+                            << target << " wasn't in the Cache";
                     }
                     break;
                 case http::verb::head:
                     // HEAD
+                    response_.result(http::status::ok);
+                    response_.version(11);
                     beast::ostream(response_.body())
-                        << "HTTP/1.1 200 OK\nSpace_used: "
-                        << cache.space_used() << "\n";
+                        << "Space_used: " << cache.space_used();
                     break;
                 case http::verb::post:
                     // POST /reset
                     if (target == "reset") {
                         cache.reset();
+                        response_.result(http::status::ok);
                         beast::ostream(response_.body())
-                            << "Cache Reset\n";
+                            << "Cache Reset";
                     } else {
                         response_.result(http::status::not_found);
                         beast::ostream(response_.body())
